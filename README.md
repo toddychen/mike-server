@@ -1,2 +1,2 @@
 # mike-server
-Mike aims to recreate the experience of watching sports with a knowledgeable friend who never misses a detail and is always ready to discuss the game. 
+Mike is an intelligent AI sports buddy designed to watch games with you and provide real-time commentary, insights, and engaging conversation about live sports events.
