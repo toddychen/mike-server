@@ -205,3 +205,64 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project-specific data and models
+data/
+models/
+*.json
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+
+# Virtual environments (additional patterns)
+venv312/
+venv*/
+env*/
+
+# Logs
+logs/
+*.log
+
+# Test files and artifacts
+test_audio/
+test_*.py
+*_test.py
+
+# Credential and config files
+.env
+.env.local
+.env.production
+.env.staging
+config.ini
+secrets.json
+credentials.json
+*.key
+*.pem
+*.crt
+
+# Docker volumes and data
+docker-data/
+volumes/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 import os
-from ..services.whisper_service import WhisperService
+from services.whisper_service import WhisperService
 
 router = APIRouter()
 whisper_service = WhisperService()

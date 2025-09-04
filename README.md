@@ -1,175 +1,182 @@
 # Mike Server
 
-A clean and simple audio-to-text conversion server using **local Whisper models** - no network connection or API keys required.
+一个集成了音频转文字和新闻搜索功能的Web服务，使用本地Whisper模型和向量数据库。
 
-## Features
+## 功能特性
 
-- 🎵 Support for multiple audio formats (mp3, mp4, mpeg, mpga, m4a, wav, webm)
-- 🤖 Local Whisper models for completely offline operation
-- 🔄 Multiple model options (tiny, base, small, medium, large)
-- 📱 Mobile-friendly API design
-- 🧹 Automatic file cleanup
-- 📚 Auto-generated API documentation
+### 🎵 音频转文字
+- 支持多种音频格式（MP3, MP4, M4A, WAV等）
+- 使用本地Whisper模型，无需网络连接
+- 支持多语言识别
+- 可配置的模型大小（tiny到large）
 
-## Tech Stack
+### 📰 新闻搜索
+- 自动抓取新闻内容
+- 向量化存储和语义搜索
+- 支持时间范围过滤
+- 去重和内容质量验证
 
-- **FastAPI** - Modern, fast web framework
-- **OpenAI Whisper** - Local audio-to-text models
-- **PyTorch** - Deep learning framework
-- **Uvicorn** - ASGI server
-- **Python 3.8+**
+### ⚙️ 任务调度
+- 自动新闻抓取和存储
+- 可配置的抓取间隔
+- 支持手动触发和控制
+- 完善的日志记录
 
-## Prerequisites
+## 技术架构
 
-### **FFmpeg Installation (Required)**
+- **Web框架**: FastAPI
+- **音频处理**: OpenAI Whisper
+- **新闻抓取**: newspaper3k
+- **向量数据库**: Qdrant
+- **文本嵌入**: SentenceTransformers
+- **任务调度**: APScheduler
 
-Whisper requires FFmpeg to process various audio formats. You must install FFmpeg before running the server.
+## 快速开始
 
-#### **macOS (using Homebrew)**
+### 1. 克隆项目
 ```bash
-brew install ffmpeg
+git clone <repository-url>
+cd mike-server
 ```
 
-#### **Ubuntu/Debian**
+### 2. 安装依赖
 ```bash
-sudo apt update
-sudo apt install ffmpeg
-```
-
-#### **Windows**
-Download from [FFmpeg official website](https://ffmpeg.org/download.html) or use Chocolatey:
-```bash
-choco install ffmpeg
-```
-
-#### **Verify Installation**
-```bash
-ffmpeg -version
-```
-
-## Quick Start
-
-### 1. Install Dependencies
-
-```bash
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-**Note**: The first run will automatically download Whisper models, which may take some time.
+### 3. 启动Qdrant
+```bash
+docker run -d -p 6333:6333 qdrant/qdrant:latest
+```
 
-### 2. Configure Environment Variables
-
-Copy `env.example` to `.env` and fill in your configuration:
-
+### 4. 配置环境变量
 ```bash
 cp env.example .env
+# 编辑.env文件配置必要参数
 ```
 
-Edit the `.env` file:
-```env
-WHISPER_MODEL=base
-PORT=3000
-MAX_FILE_SIZE=10485760
-```
-
-### 3. Start the Server
-
+### 5. 启动服务
 ```bash
-python run.py
+./scripts/start.sh
 ```
 
-Or use uvicorn directly:
+## 使用方式
+
+### 音频转文字
 ```bash
-uvicorn src.main:app --reload --host 0.0.0.0 --port 3000
+curl -X POST "http://localhost:3000/api/audio/transcribe" \
+  -F "audio_file=@audio.m4a"
 ```
 
-### 4. Access the API
-
-- Server: http://localhost:3000
-- API Documentation: http://localhost:3000/docs
-- Health Check: http://localhost:3000/health
-
-## API Endpoints
-
-### POST /api/audio/transcribe
-Upload an audio file and convert it to text
-
-**Request:**
-- Content-Type: multipart/form-data
-- Parameter: audio_file (audio file)
-
-**Response:**
-```json
-{
-  "success": true,
-  "transcription": "Converted text content",
-  "filename": "filename",
-  "file_size": file_size,
-  "model": "model_name_used"
-}
+### 搜索新闻
+```bash
+curl -X POST "http://localhost:3000/api/news/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query_text": "科技新闻",
+    "cutoff_timestamp": "2024-01-15T10:00:00",
+    "top_k": 5
+  }'
 ```
 
-### GET /api/audio/supported-formats
-Get supported audio formats
+### 管理调度器
+```bash
+# 启动调度器
+curl -X POST "http://localhost:3000/api/admin/scheduler/start?secret=heymike"
 
-### GET /api/audio/models
-Get available Whisper model information
+# 查看状态
+curl "http://localhost:3000/api/admin/scheduler/status?secret=heymike"
+```
 
-### POST /api/audio/change-model/{model_name}
-Switch Whisper models
+## API文档
 
-## Whisper Model Comparison
+启动服务后访问：http://localhost:3000/docs
 
-| Model | Size | Speed | Accuracy | Use Case |
-|-------|------|-------|----------|----------|
-| tiny | 39MB | Fastest | Lower | Quick testing |
-| base | 74MB | Fast | Medium | Daily use |
-| small | 244MB | Medium | Good | Balanced choice |
-| medium | 769MB | Slower | High | High quality needs |
-| large | 1550MB | Slowest | Highest | Professional use |
+## 部署
 
-## Project Structure
+### Docker部署（推荐）
+```bash
+cd docker
+docker-compose up -d --build
+```
+
+### 传统部署
+```bash
+./scripts/start.sh
+```
+
+## 配置说明
+
+### 环境变量
+- `ADMIN_SECRET`: 管理员密钥（默认：heymike）
+- `QDRANT_HOST`: Qdrant主机地址
+- `QDRANT_PORT`: Qdrant端口
+- `WHISPER_MODEL`: Whisper模型大小
+- `AUTO_START_SCHEDULER`: 是否自动启动调度器
+
+### 团队配置
+在`.env`文件中配置`TEAM_IDS`来指定要抓取新闻的团队。
+
+## 项目结构
 
 ```
 mike-server/
-├── src/
-│   ├── main.py              # FastAPI main application
-│   ├── routes/
-│   │   └── audio.py         # Audio processing routes
-│   └── services/
-│       └── whisper_service.py # Local Whisper service
-├── requirements.txt          # Python dependencies
-├── env.example              # Environment variables example
-├── run.py                   # Startup script
-└── README.md
+├── src/                    # 源代码
+│   ├── config/            # 配置管理
+│   ├── models/            # 数据模型
+│   ├── routes/            # API路由
+│   ├── services/          # 业务逻辑
+│   ├── utils/             # 工具函数
+│   └── scripts/           # 独立脚本
+├── tests/                 # 测试代码
+├── docs/                  # 文档
+├── scripts/               # 部署脚本
+└── docker/                # Docker配置
 ```
 
-## Development
+## 开发
 
-### Development Mode
-The server runs in development mode by default with hot reload support.
+### 运行测试
+```bash
+pytest
+```
 
-### Environment Variables
-- `WHISPER_MODEL`: Whisper model name (default: base)
-- `PORT`: Server port (default: 3000)
-- `MAX_FILE_SIZE`: Maximum file size in bytes (default: 10MB)
+### 代码格式化
+```bash
+black src/
+isort src/
+```
 
-### Model Download
-On first run, Whisper will automatically download the specified model to the `~/.cache/whisper/` directory.
+### 独立运行调度器
+```bash
+python src/scripts/run_scheduler.py
+```
 
-## Troubleshooting
+## 监控和日志
 
-### **FFmpeg Not Found Error**
-If you see `[Errno 2] No such file or directory: 'ffmpeg'`:
-1. Install FFmpeg using the instructions above
-2. Verify installation with `ffmpeg -version`
-3. Restart the server
+- 应用日志：`logs/app.log`
+- 调度器日志：`logs/scheduler.log`
+- 健康检查：`/health`
+- 调度器状态：`/api/admin/scheduler/status`
 
-### **Audio Processing Issues**
-- Ensure your audio file is in a supported format
-- Check that the file is not corrupted
-- Verify FFmpeg is properly installed
+## 故障排除
 
-## License
+### 常见问题
+1. **Qdrant连接失败**: 检查Docker服务是否运行
+2. **模型下载失败**: 检查网络连接和磁盘空间
+3. **权限问题**: 确保脚本有执行权限
+
+### 获取帮助
+- 查看日志文件
+- 检查健康检查端点
+- 参考部署文档
+
+## 贡献
+
+欢迎提交Issue和Pull Request！
+
+## 许可证
 
 MIT License
