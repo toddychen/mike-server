@@ -131,6 +131,53 @@ class GamePlayService:
             self.logger.error(f"Unexpected error while fetching plays for game {game_id}: {e}")
             raise
     
+    def fetch_plays_from_api(self, game_id: str) -> Dict:
+        """
+        Fetch plays from API without saving to local file
+        
+        Args:
+            game_id: Game identifier (e.g., 'nfl.g.20250823025')
+            
+        Returns:
+            Dictionary containing the processed game plays data
+            
+        Raises:
+            ValueError: If game_id is invalid
+            RequestException: If API request fails
+            Exception: For other errors during processing
+        """
+        if not game_id or not isinstance(game_id, str):
+            raise ValueError("game_id must be a non-empty string")
+        
+        try:
+            # Construct API URL
+            api_url = f"{self.base_url}/{game_id}/periodGamePlays"
+            self.logger.info(f"Fetching plays from API (no save): {api_url}")
+            
+            # Make HTTP request
+            response = requests.get(api_url, timeout=30)
+            response.raise_for_status()
+            
+            # Parse JSON response
+            raw_data = response.json()
+            self.logger.info(f"Successfully fetched data from API, response size: {len(response.text)} characters")
+            
+            # Post-process the data
+            processed_data = self._post_process_data(raw_data)
+            
+            self.logger.info(f"Successfully processed data from API for game {game_id}")
+            return processed_data
+            
+        except RequestException as e:
+            self.logger.error(f"HTTP request failed for game {game_id}: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse API response JSON for game {game_id}: {e}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error while fetching plays for game {game_id}: {e}")
+            raise
+    
     def _post_process_data(self, raw_data: Dict) -> Dict:
         """
         Post-process the raw API response data

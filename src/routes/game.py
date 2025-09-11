@@ -157,27 +157,114 @@ async def get_game_replay(
         )
 
 @router.get("/{game_id}/plays")
-async def get_game_plays(game_id: str):
+async def get_game_plays(
+    game_id: str,
+    lastX: int = Query(3, description="Number of last plays to concatenate for LastXPlays field (default: 3)"),
+    convo: bool = Query(False, description="Enable conversational AI responses (default: false)")
+):
     """
-    Get full game plays data for a specific game
+    Get full game plays data for a specific game from API
     
     Args:
         game_id: Game identifier (e.g., 'nfl.g.20250823025')
+        lastX: Number of last plays to concatenate for LastXPlays field
+        convo: Enable conversational AI responses
         
     Returns:
-        JSON response containing full game data
+        JSON response containing full game data with LastXPlays and optional conversation
     """
     try:
-        # Get full game data
-        game_data = game_service.get_plays(game_id)
+        # Get full game data from API (no local file)
+        game_data = game_service.fetch_plays_from_api(game_id)
+        
+        # Extract plays and drives
+        plays = game_data.get("Plays", [])
+        drives = game_data.get("Drives", [])
+        
+        if plays:
+            # Get the last play as current play
+            current_play = plays[-1]  # Last play in the list is the current play
+            
+            if current_play:
+                # Build LastXPlays field by concatenating the last X plays' Details
+                last_x_plays_text = ""
+                if len(plays) >= lastX:
+                    # Get the last X plays
+                    last_x_plays = plays[-lastX:]
+                    # Concatenate their Details fields
+                    last_x_plays_text = ". ".join([play.get("Details", "") for play in last_x_plays])
+                else:
+                    # If we have fewer plays than requested, use all available plays
+                    last_x_plays_text = ". ".join([play.get("Details", "") for play in plays])
+                
+                # Add LastXPlays field to current play
+                current_play["LastXPlays"] = last_x_plays_text
+                
+                # Log current play details and LastXPlays
+                play_text = current_play.get("Details", "No details available")
+                logger.info(f"Current play text for game {game_id}: {play_text[:100]}...")
+                logger.info(f"LastXPlays text for game {game_id}: {last_x_plays_text[:100]}...")
+                
+                # Get related news using the LastXPlays text
+                try:
+                    related_news = game_service.get_related_news_for_play(
+                        play_text=last_x_plays_text,  # Use LastXPlays text
+                        days_back=7,
+                        top_k=10
+                    )
+                    
+                    # Add RelatedNews field to current play
+                    current_play["RelatedNews"] = related_news
+                    
+                    # Generate conversational response only if convo is enabled
+                    if convo:
+                        logger.info("ConvoClient: convo=true, calling generate_conversation_response")
+                        try:
+                            convo_result = convo_client.generate_conversation_response(
+                                recent_play_text=last_x_plays_text,
+                                latest_play=current_play,
+                                related_news=related_news
+                            )
+                            
+                            # Add conversation response and cost data to current play
+                            current_play["ConvoResponse"] = convo_result["convo"]
+                            current_play["InputCost"] = convo_result["input_cost"]
+                            current_play["OutputCost"] = convo_result["output_cost"]
+                            current_play["TotalCost"] = convo_result["total_cost"]
+                            
+                            logger.info(f"Generated conversational response: {convo_result['convo']}")
+                            logger.info(f"Cost data - Input: ${convo_result['input_cost']:.6f}, Output: ${convo_result['output_cost']:.6f}, Total: ${convo_result['total_cost']:.6f}")
+                        except Exception as e:
+                            logger.warning(f"Failed to generate conversational response: {e}")
+                            current_play["ConvoResponse"] = "[NO ACTION]"
+                            current_play["InputCost"] = 0.0
+                            current_play["OutputCost"] = 0.0
+                            current_play["TotalCost"] = 0.0
+                    else:
+                        # If convo is disabled, don't add ConvoResponse field
+                        logger.debug("Conversational responses disabled")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to get related news: {e}")
+                    current_play["RelatedNews"] = []
+                    if convo:
+                        current_play["ConvoResponse"] = "[NO ACTION]"
+            else:
+                logger.warning(f"No current play found")
+        else:
+            logger.info(f"No plays found in game data")
+        
+        # Reverse the Plays list so the latest plays appear first
+        if "Plays" in game_data and game_data["Plays"]:
+            game_data["Plays"].reverse()
         
         return game_data
         
-    except FileNotFoundError as e:
-        logger.warning(f"Game data not found for {game_id}: {e}")
+    except ValueError as e:
+        logger.warning(f"Invalid parameters for game {game_id}: {e}")
         raise HTTPException(
-            status_code=404,
-            detail=f"Game data not found: {str(e)}"
+            status_code=400,
+            detail=f"Invalid parameters: {str(e)}"
         )
     except Exception as e:
         error_msg = f"Failed to get game plays for {game_id}: {e}"

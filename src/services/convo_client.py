@@ -71,7 +71,9 @@ class ConvoClient:
             self.logger.info(f"System prompt: {system_prompt}")
             self.logger.info(f"User prompt: {user_prompt}")
             
-            # Call GPT API
+            # Call GPT API with caching optimization
+            # Note: OpenAI automatically caches system prompts for models that support it
+            # (GPT-4o, GPT-4o mini, o1-preview, o1-mini) when prompts exceed 1,024 tokens
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -90,32 +92,45 @@ class ConvoClient:
             # Log the complete response object for debugging
             self.logger.info(f"Complete GPT response object: {response}")
             
-            # Extract and log token usage statistics
+            # Extract and log token usage statistics including cache information
             if hasattr(response, 'usage') and response.usage:
                 usage = response.usage
                 input_tokens = getattr(usage, 'prompt_tokens', 0)
                 output_tokens = getattr(usage, 'completion_tokens', 0)
                 total_tokens = getattr(usage, 'total_tokens', input_tokens + output_tokens)
+                cached_tokens = getattr(usage, 'cached_tokens', 0)  # New: track cached tokens
                 
                 # Calculate pricing for GPT-5 mini
                 input_cost = (input_tokens / 1_000_000) * 0.250  # $0.250 per 1M tokens
                 output_cost = (output_tokens / 1_000_000) * 2.000  # $2.000 per 1M tokens
                 total_cost = input_cost + output_cost
                 
+                # Calculate cache savings
+                cache_savings = (cached_tokens / 1_000_000) * 0.250 if cached_tokens > 0 else 0
+                cache_hit_rate = (cached_tokens / (input_tokens + cached_tokens)) * 100 if (input_tokens + cached_tokens) > 0 else 0
+                
                 self.logger.info(f"Token usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}")
+                self.logger.info(f"Cache info - Cached tokens: {cached_tokens}, Cache hit rate: {cache_hit_rate:.1f}%")
                 self.logger.info(f"Cost calculation - Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}")
+                if cached_tokens > 0:
+                    self.logger.info(f"Cache savings - ${cache_savings:.6f} saved from cached tokens")
             else:
                 self.logger.warning("No token usage information available in response")
+                cached_tokens = 0
+                cache_savings = 0
             
             result = response.choices[0].message.content.strip()
             self.logger.info(f"Generated response: {result}")
             
-            # Wrap up the result with cost data
+            # Wrap up the result with cost and cache data
             convo_result = {
                 "convo": result,
                 "input_cost": input_cost,
                 "output_cost": output_cost,
-                "total_cost": total_cost
+                "total_cost": total_cost,
+                "cached_tokens": cached_tokens,
+                "cache_savings": cache_savings,
+                "cache_hit_rate": cache_hit_rate
             }
             
             return convo_result
@@ -126,7 +141,10 @@ class ConvoClient:
                 "convo": "[NO ACTION]",
                 "input_cost": 0.0,
                 "output_cost": 0.0,
-                "total_cost": 0.0
+                "total_cost": 0.0,
+                "cached_tokens": 0,
+                "cache_savings": 0.0,
+                "cache_hit_rate": 0.0
             }
     
     def _get_system_prompt(self) -> str:

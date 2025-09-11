@@ -5,8 +5,9 @@ import os
 from dotenv import load_dotenv
 import asyncio
 
-from routes import audio, news, admin, game
+from routes import audio, news, admin, game, functions
 from services.scheduler import NewsSchedulerService
+from function_calling.function_registrar import register_all_functions, cleanup_web_client
 from config.settings import settings
 from utils.logger import logger
 
@@ -21,6 +22,10 @@ async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
     # Startup
     try:
+        # Register all functions
+        register_all_functions()
+        logger.info("All functions registered successfully")
+        
         # Can be controlled via environment variable
         if settings.auto_start_scheduler:
             await news_scheduler.start_scheduler()
@@ -28,7 +33,7 @@ async def lifespan(app: FastAPI):
         else:
             logger.info("News scheduler not auto-started, waiting for manual start")
     except Exception as e:
-        logger.error(f"Failed to start scheduler: {e}")
+        logger.error(f"Failed to start services: {e}")
     
     yield
     
@@ -38,6 +43,12 @@ async def lifespan(app: FastAPI):
         logger.info("News scheduler stopped")
     except Exception as e:
         logger.error(f"Failed to stop scheduler: {e}")
+    
+    try:
+        await cleanup_web_client()
+        logger.info("Web client cleaned up")
+    except Exception as e:
+        logger.error(f"Failed to cleanup web client: {e}")
 
 app = FastAPI(
     title=settings.app_name,
@@ -55,11 +66,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 包含路由
+# Include routers
 app.include_router(audio.router, prefix="/api/audio", tags=["audio"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(game.router, prefix="/api/game", tags=["game"])
+app.include_router(functions.router, prefix="/api/functions", tags=["functions"])
 
 
 @app.get("/")
@@ -78,6 +90,9 @@ async def root():
             "game_plays": "/api/game/plays/{game_id}",
             "game_cache": "/api/game/cache/*",
             "admin_scheduler": "/api/admin/scheduler/*",
+            "functions_call": "/api/functions/call",
+            "functions_list": "/api/functions/list",
+            "functions_health": "/api/functions/health",
             "docs": "/docs"
         }
     }
